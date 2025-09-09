@@ -51,7 +51,7 @@ try:
     spi = busio.SPI(board.SCK, MOSI=board.MOSI)
     print("I2C and SPI buses initialized successfully.")
 except Exception as e:
-    print(f"Error initializing I2C/SPI buses: {e}")
+    print("Error initializing I2C/SPI buses: {}".format(e))
     print("Please ensure you have run 'sudo pip3 install adafruit-blinka' and configured it for Jetson Nano.")
     exit()
 
@@ -110,7 +110,7 @@ try:
     print("Motor controller initialized.")
     motors_ok = True
 except Exception as e:
-    print(f"Could not initialize motor controller: {e}")
+    print("Could not initialize motor controller: {}".format(e))
     motors_ok = False
 
 # 2. OLED Display
@@ -126,7 +126,7 @@ try:
     print("OLED display initialized.")
     oled_ok = True
 except Exception as e:
-    print(f"Could not initialize OLED display: {e}")
+    print("Could not initialize OLED display: {}".format(e))
     oled_ok = False
 
 # 3. Time-of-Flight Sensor
@@ -136,7 +136,7 @@ try:
     print("ToF sensor initialized.")
     tof_ok = True
 except Exception as e:
-    print(f"Could not initialize ToF sensor: {e}")
+    print("Could not initialize ToF sensor: {}".format(e))
     tof_ok = False
 
 # 4. Front LEDs (DotStar)
@@ -146,7 +146,7 @@ try:
     print("Front LEDs initialized.")
     leds_ok = True
 except Exception as e:
-    print(f"Could not initialize front LEDs: {e}")
+    print("Could not initialize front LEDs: {}".format(e))
     leds_ok = False
     
 
@@ -196,7 +196,7 @@ def test_tof():
     print("\n--- Testing ToF Sensor ---")
     print("Reading distance for 5 seconds. Put your hand in front of the bot.")
     for _ in range(25):
-        print(f"Distance: {tof.range} mm")
+        print("Distance: {} mm".format(tof.range))
         time.sleep(0.2)
 
 def test_motors():
@@ -281,7 +281,7 @@ def main():
         print("\n--- All Tests Complete ---")
 
     except Exception as e:
-        print(f"An error occurred during testing: {e}")
+        print("An error occurred during testing: {}".format(e))
 
     finally:
         # --- Cleanup ---
