@@ -7,17 +7,23 @@
 # Before running, you need to install the required Python libraries.
 # Open a terminal on your Jetson Nano and run the following commands:
 #
+# # Install system-level dependencies using apt for better compatibility
 # sudo apt-get update
-# sudo apt-get install python3-pip python3-pil
+# sudo apt-get install python3-pip python3-pil python3-numpy python3-opencv
 #
-# pip3 install --upgrade setuptools
-# pip3 install --no-deps adafruit-blinka==6.15.0 # <-- Install base library without its deps first
-# pip3 install --no-deps adafruit-circuitpython-pca9685 # <-- Install subsequent libraries without their deps
+# # Upgrade pip and install base tools
+# pip3 install --upgrade setuptools wheel
+#
+# # Install Adafruit libraries using pip, avoiding their conflicting dependencies
+# pip3 install --no-deps adafruit-blinka==6.15.0
+# pip3 install --no-deps adafruit-circuitpython-pca9685
 # pip3 install --no-deps adafruit-circuitpython-motor
 # pip3 install --no-deps adafruit-circuitpython-ssd1306
 # pip3 install --no-deps adafruit-circuitpython-vl53l0x
 # pip3 install --no-deps adafruit-circuitpython-dotstar
-# pip3 install opencv-python-headless
+#
+# # NOTE: OpenCV is installed via apt ('python3-opencv') to use the
+# # hardware-accelerated version pre-built for the Jetson Nano.
 #
 # To run the script:
 # python3 duckiebot_test.py
