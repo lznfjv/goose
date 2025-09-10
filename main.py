@@ -1,138 +1,115 @@
-# Duckiebot Motor Test Script (Blinka-Free)
+# Duckiebot Bare-Metal Motor Test
 #
-# This script is designed to test ONLY the motors of a Duckiebot
-# running on a Jetson Nano, without using the Adafruit Blinka library.
+# GOAL: Move the left wheel with the absolute minimum number of libraries.
 #
-# --- SETUP INSTRUCTIONS ---
+# This script talks directly to the PCA9685 PWM controller chip.
+# It does NOT use Adafruit Blinka, pca9685-driver, or any other high-level library.
 #
-# 1. Install system-level dependencies for pip:
-# sudo apt-get update
-# sudo apt-get install python3-pip
+# --- SETUP (The only dependency) ---
 #
-# 2. Upgrade pip and install base tools:
-# pip3 install --upgrade setuptools wheel
+# 1. Open a terminal on your Duckiebot.
 #
-# 3. Install required I2C and motor driver libraries:
-# pip3 install smbus2
-# pip3 install pca9685-driver
+# 2. Install the I2C communication library:
+#    pip3 install smbus2
 #
 # --- HOW TO RUN ---
 #
-# No special environment variables are needed for this version.
-# Simply run the script with python3:
-# python3 duckiebot_test.py
+# python3 minimal_motor_test.py
+#
+# The left wheel should move forward for 2 seconds, then stop.
 #
 
 import time
 from smbus2 import SMBus
-from pca9685_driver import PCA9685
 
-print("Duckiebot Motor Test Initializing...")
+# --- PCA9685 Configuration ---
+# This is the I2C address of the motor driver HAT
+PCA9685_ADDRESS = 0x60
 
-# --- Component Initialization ---
+# These are the memory addresses (registers) inside the chip that control it
+MODE1_REG = 0x00
+PRESCALE_REG = 0xFE
+# Each channel's ON/OFF time is controlled by 4 registers (L=Low byte, H=High byte)
+# We calculate the starting register for a channel and write 4 bytes from there.
+# For example, Channel 8's registers start at 0x26.
+LED0_ON_L_REG = 0x06
 
-# 1. Motor Controller (PCA9685)
-# I2C Address: 0x60 (Motor Driver HAT)
-# Jetson Nano GPIO I2C bus is typically 1
-try:
-    # Initialize the PCA9685 controller
-    pca = PCA9685(bus_num=1, address=0x60)
-    pca.set_pwm_frequency(1600) # Set frequency for motor driver
-    print("Motor controller initialized successfully.")
-    
-    # This setup is specific to the DRV8833 driver on the Duckietown HAT
-    # We use a custom motor class to simplify control
-    class DuckieMotor:
-        def __init__(self, controller, in1_ch, in2_ch, pwm_ch):
-            self.controller = controller
-            self.in1_ch = in1_ch
-            self.in2_ch = in2_ch
-            self.pwm_ch = pwm_ch
-            self._throttle = 0
+# --- Duckiebot Motor Channel Assignments ---
+# These are the channels on the PCA9685 that control the LEFT motor
+LEFT_MOTOR_PWM = 8  # Controls speed
+LEFT_MOTOR_IN2 = 9  # Controls direction pin 2
+LEFT_MOTOR_IN1 = 10 # Controls direction pin 1
 
-        @property
-        def throttle(self):
-            return self._throttle
-
-        @throttle.setter
-        def throttle(self, value):
-            value = max(min(value, 1.0), -1.0)
-            self._throttle = value
-            
-            # PCA9685 uses 12-bit resolution (0-4095)
-            speed = int(abs(value) * 4095)
-            self.controller.set_pwm(self.pwm_ch, 0, speed)
-
-            if value > 0:  # Forward
-                self.controller.set_pwm(self.in1_ch, 0, 4095)
-                self.controller.set_pwm(self.in2_ch, 0, 0)
-            elif value < 0:  # Backward
-                self.controller.set_pwm(self.in1_ch, 0, 0)
-                self.controller.set_pwm(self.in2_ch, 0, 4095)
-            else:  # Stop/Brake
-                self.controller.set_pwm(self.in1_ch, 0, 4095)
-                self.controller.set_pwm(self.in2_ch, 0, 4095)
-
-    # Motor channels on the Duckietown HAT
-    left_motor = DuckieMotor(pca, in1_ch=10, in2_ch=9, pwm_ch=8)
-    right_motor = DuckieMotor(pca, in1_ch=5, in2_ch=6, pwm_ch=7)
-
-    motors_ok = True
-except Exception as e:
-    print("Could not initialize motor controller: {}".format(e))
-    print("Ensure I2C is enabled and the HAT is connected properly.")
-    motors_ok = False
-    
-# --- Test Functions ---
-
-def test_motors():
-    if not motors_ok:
-        print("Motors not initialized, skipping test.")
-        return
-        
-    print("\n--- Testing Motors ---")
-    speed = 0.5 # Use a moderate speed
-    
-    print("Forward...")
-    left_motor.throttle = speed
-    right_motor.throttle = speed
-    time.sleep(1)
-
-    print("Backward...")
-    left_motor.throttle = -speed
-    right_motor.throttle = -speed
-    time.sleep(1)
-
-    print("Turn Right...")
-    left_motor.throttle = speed
-    right_motor.throttle = -speed
-    time.sleep(1)
-
-    print("Turn Left...")
-    left_motor.throttle = -speed
-    right_motor.throttle = speed
-    time.sleep(1)
-    
-    print("Stopping motors.")
-    left_motor.throttle = 0
-    right_motor.throttle = 0
 
 def main():
     try:
-        test_motors()
-        print("\n--- Motor Test Complete ---")
+        # Get a handle to the I2C bus. On Jetson Nano, it's almost always bus 1.
+        bus = SMBus(1)
+        print("Successfully opened I2C bus.")
 
+        # --- Initialize the PCA9685 Chip ---
+        
+        # 1. Reset the chip
+        bus.write_byte_data(PCA9685_ADDRESS, MODE1_REG, 0x00)
+        time.sleep(0.01) # Wait for reset
+        
+        # 2. Set the PWM frequency (1600 Hz is typical for this motor driver)
+        prescale_val = int(25000000.0 / (4096 * 1600) - 1)
+        
+        # To set the frequency, we have to put the chip to sleep first
+        old_mode = bus.read_byte_data(PCA9685_ADDRESS, MODE1_REG)
+        new_mode = (old_mode & 0x7F) | 0x10  # Set the SLEEP bit
+        bus.write_byte_data(PCA9685_ADDRESS, MODE1_REG, new_mode)
+        
+        # Now we can set the frequency
+        bus.write_byte_data(PCA9685_ADDRESS, PRESCALE_REG, prescale_val)
+        
+        # Wake the chip back up
+        bus.write_byte_data(PCA9685_ADDRESS, MODE1_REG, old_mode)
+        time.sleep(0.01) # Wait for oscillator to stabilize
+        
+        # Enable auto-incrementing of registers, which lets us write all 4 bytes for a channel at once
+        bus.write_byte_data(PCA9685_ADDRESS, MODE1_REG, old_mode | 0xA0)
+        print("PCA9685 motor controller initialized.")
+
+        # --- Move the Left Wheel ---
+        print("\nMoving LEFT wheel forward for 2 seconds...")
+
+        # The PCA9685 works on a 4096-tick cycle (12-bit).
+        # We set a channel's "ON" time (0-4095) and "OFF" time (0-4095).
+        # - Full ON is (0, 4095)
+        # - Full OFF is (0, 0)
+        
+        # 1. Set direction to FORWARD
+        # IN1 = ON, IN2 = OFF
+        # The 4 bytes are: ON_L, ON_H, OFF_L, OFF_H
+        bus.write_i2c_block_data(PCA9685_ADDRESS, LED0_ON_L_REG + 4 * LEFT_MOTOR_IN1, [0, 0, 0xFF, 0x0F]) # (0, 4095)
+        bus.write_i2c_block_data(PCA9685_ADDRESS, LED0_ON_L_REG + 4 * LEFT_MOTOR_IN2, [0, 0, 0, 0])      # (0, 0)
+
+        # 2. Set PWM speed to ~50%
+        # 50% of 4095 is ~2048
+        speed_l = 0x00       # Low byte of 2048
+        speed_h = 0x08       # High byte of 2048
+        bus.write_i2c_block_data(PCA9685_ADDRESS, LED0_ON_L_REG + 4 * LEFT_MOTOR_PWM, [0, 0, speed_l, speed_h])
+
+        # Let the motor run
+        time.sleep(2)
+
+    except FileNotFoundError:
+        print("ERROR: I2C bus not found. Ensure I2C is enabled on your Jetson Nano.")
     except Exception as e:
-        print("An error occurred during testing: {}".format(e))
-
+        print("An error occurred: {}".format(e))
     finally:
-        # --- Cleanup ---
-        # Ensure all components are turned off safely on exit.
-        print("Cleaning up and shutting down motors...")
-        if motors_ok:
-            pca.cleanup()
-        print("Cleanup complete. Exiting.")
+        # --- Cleanup: Stop the motor ---
+        print("Stopping motor and cleaning up.")
+        try:
+            # Set all motor channels to OFF to guarantee it stops.
+            bus.write_i2c_block_data(PCA9685_ADDRESS, LED0_ON_L_REG + 4 * LEFT_MOTOR_PWM, [0, 0, 0, 0])
+            bus.close()
+            print("Cleanup complete.")
+        except NameError:
+            # This happens if 'bus' failed to initialize
+            print("I2C bus was not opened, no cleanup needed.")
 
 if __name__ == "__main__":
     main()
-
