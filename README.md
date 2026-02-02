@@ -1,6 +1,6 @@
 ![Goose Glamour Shot](https://github.com/lznfjv/goose/blob/main/assets/goose_glamour.jpg?raw=true)
 
-# GooseBot - A hands-on, up-to-date alternative to the infamous Duckiebot
+# GooseBot - A hands-on, up-to-date instructional platform for robotics
 Author: Kevin Racktoo
 
 ## Problem
